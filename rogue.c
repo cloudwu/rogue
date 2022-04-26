@@ -45,6 +45,7 @@ struct context {
 	int h;
 	struct slot *s;
 	struct sprite *spr;
+	uint8_t layer[256];
 };
 
 static struct context *
@@ -224,7 +225,7 @@ draw_sprite(struct context *ctx, struct sprite *spr) {
 	struct slot *des_slot = &ctx->s[des_y * ctx->width + des_x];
 	for (i=0;i<h;i++) {
 		for (j=0;j<w;j++) {
-			if (src_slot[j].code && src_slot[j].layer >= des_slot[j].layer) {
+			if (ctx->layer[src_slot[j].layer] == 0 && src_slot[j].code && src_slot[j].layer >= des_slot[j].layer) {
 				des_slot[j] = src_slot[j];
 			}
 		}
@@ -720,6 +721,23 @@ lsprite(lua_State *L) {
 	return 1;
 }
 
+static int
+llayer(lua_State *L) {
+	struct context * ctx = getCtx(L);
+	luaL_checktype(L, 1, LUA_TTABLE);
+	lua_pushnil(L);
+	while (lua_next(L, 1) != 0) {
+		int isnum;
+		int layer = lua_tointegerx(L, -2, &isnum);
+		if (isnum && layer >=0 && layer <=255) {
+			int hide = lua_toboolean(L, -1);
+			ctx->layer[layer] = !hide;
+		}
+		lua_pop(L, 1);
+	}
+	return 0;
+}
+
 LUAMOD_API int
 luaopen_rogue_core(lua_State *L) {
 	luaL_checkversion(L);
@@ -728,19 +746,12 @@ luaopen_rogue_core(lua_State *L) {
 		{ "frame", lframe },
 		{ "event", levent },
 		{ "sprite", lsprite },
+		{ "layer", llayer },
 		{ NULL, NULL },
 	};
 	luaL_newlibtable(L, l);
 	struct context *ctx = (struct context *)lua_newuserdatauv(L, sizeof(struct context), 1);
-	ctx->renderer = NULL;
-	ctx->window = NULL;
-	ctx->tick = 0;
-	ctx->frame = 0;
-	ctx->fps = 0;
-	ctx->s = NULL;
-	ctx->spr = NULL;
-	ctx->x = 0;
-	ctx->y = 0;
+	memset(ctx, 0, sizeof(*ctx));
 	luaL_setfuncs(L,l,1);
 	return 1;
 }

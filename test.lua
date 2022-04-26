@@ -75,7 +75,9 @@ function EVENT.KEY(name, press)
 		elseif name == "Down" then
 			y = y + 1
 		elseif name == "Q" then
-			background:visible(false)
+			title:visible(false)
+		elseif name == "Z" then
+			c.layer { [0] = false }
 		elseif name == "A" then
 			camera_x = camera_x - 1
 		elseif name == "D" then
@@ -87,7 +89,9 @@ function EVENT.KEY(name, press)
 		end
 	else
 		if name == "Q" then
-			background:visible(true)
+			title:visible(true)
+		elseif name == "Z" then
+			c.layer { [0] = true }
 		end
 	end
 end
