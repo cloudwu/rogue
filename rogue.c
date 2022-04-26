@@ -37,6 +37,8 @@ struct context {
 	uint64_t tick;
 	int frame;
 	int fps;
+	int x;
+	int y;
 	int width;
 	int height;
 	int w;
@@ -189,8 +191,8 @@ static inline void
 draw_sprite(struct context *ctx, struct sprite *spr) {
 	int src_x = 0;
 	int src_y = 0;
-	int des_x = spr->x;
-	int des_y = spr->y;
+	int des_x = spr->x - ctx->x;
+	int des_y = spr->y - ctx->y;
 	int w = spr->w;
 	int h = spr->h;
 	if (des_x < 0) {
@@ -268,6 +270,8 @@ lframe(lua_State *L) {
 	struct context * ctx = getCtx(L);
 	if (ctx->surface == NULL)
 		return luaL_error(L, "Init first");
+	ctx->x = luaL_optinteger(L, 2, 0);
+	ctx->y = luaL_optinteger(L, 3, 0);
 	flip_surface(ctx);
 	uint64_t c = SDL_GetTicks64();
 	int lastframe = ctx->frame;
@@ -735,6 +739,8 @@ luaopen_rogue_core(lua_State *L) {
 	ctx->fps = 0;
 	ctx->s = NULL;
 	ctx->spr = NULL;
+	ctx->x = 0;
+	ctx->y = 0;
 	luaL_setfuncs(L,l,1);
 	return 1;
 }
