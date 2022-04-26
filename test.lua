@@ -55,6 +55,9 @@ s2:setcolor {
 local x = 0
 local y = 0
 
+local camera_x = 0
+local camera_y = 0
+
 local EVENT = {}
 
 function EVENT.QUIT()
@@ -73,6 +76,14 @@ function EVENT.KEY(name, press)
 			y = y + 1
 		elseif name == "Q" then
 			background:visible(false)
+		elseif name == "A" then
+			camera_x = camera_x - 1
+		elseif name == "D" then
+			camera_x = camera_x + 1
+		elseif name == "W" then
+			camera_y = camera_y - 1
+		elseif name == "S" then
+			camera_y = camera_y + 1
 		end
 	else
 		if name == "Q" then
@@ -93,5 +104,5 @@ while dispatch(c.event()) do
 	s:setpos(x,y)
 	title:setpos(x, y+4)
 	title:text(string.format("x = %d\ny = %d", x, y))
-	c.frame()
+	c.frame(camera_x, camera_y)
 end

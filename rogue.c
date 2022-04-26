@@ -270,8 +270,8 @@ lframe(lua_State *L) {
 	struct context * ctx = getCtx(L);
 	if (ctx->surface == NULL)
 		return luaL_error(L, "Init first");
-	ctx->x = luaL_optinteger(L, 2, 0);
-	ctx->y = luaL_optinteger(L, 3, 0);
+	ctx->x = luaL_optinteger(L, 1, 0);
+	ctx->y = luaL_optinteger(L, 2, 0);
 	flip_surface(ctx);
 	uint64_t c = SDL_GetTicks64();
 	int lastframe = ctx->frame;
