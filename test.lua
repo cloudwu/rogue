@@ -33,6 +33,13 @@ local s = c.sprite {
 	layer = 1,
 }
 
+local title = c.sprite {
+	"       ",
+	"       ",
+	color = 0x80ff,
+	layer = 2,
+}
+
 local s2 = s:clone()
 s2:setcolor(0xff00)
 s2:setcolor {
@@ -84,5 +91,7 @@ end
 
 while dispatch(c.event()) do
 	s:setpos(x,y)
+	title:setpos(x, y+4)
+	title:text(string.format("x = %d\ny = %d", x, y))
 	c.frame()
 end

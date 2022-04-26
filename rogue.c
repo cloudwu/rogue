@@ -11,6 +11,7 @@
 #define FRAMESEC 1000
 #define PIXELWIDTH 8
 #define PIXELHEIGHT 16
+#define TABSIZE 8
 
 struct slot {
 	uint16_t background;	// 565 RGB
@@ -609,6 +610,48 @@ lsetcolor(lua_State *L) {
 }
 
 static int
+lsettext(lua_State *L) {
+	struct sprite * spr = getSpr(L);
+	const char *text = luaL_checkstring(L, 2);
+	int x=0;
+	int y=0;
+	int i,j;
+	struct slot *s = spr->s;
+	for (i=0;text[i] && y < spr->h;i++) {
+		char c = text[i];
+		int nextline = 0;
+		if (c == '\n') {
+			nextline = 1;
+		} else if (c == '\t') {
+			x = (x / TABSIZE + 1) * TABSIZE;
+			if (x >= spr->w) {
+				nextline = 1;
+			}
+		} else {
+			s[x].code = text[i];
+			++x;
+			if (x >= spr->w) {
+				nextline = 1;
+				x = 0;
+			}
+		}
+		if (nextline) {
+			for (j=x;j<spr->w;j++) {
+				s[j].code = ' ';
+			}
+			++y;
+			x = 0;
+			s += spr->w;
+		}
+	}
+	int n = spr->w * (spr->h - i);
+	for (i=0;i<n;i++) {
+		s[i].code = ' ';
+	}
+	return 0;
+}
+
+static int
 lsprite(lua_State *L) {
 	luaL_checktype(L, 1, LUA_TTABLE);
 	int w,h;
@@ -647,6 +690,7 @@ lsprite(lua_State *L) {
 			{"setpos", lsetpos },
 			{"setcolor", lsetcolor },
 			{"clone", NULL },
+			{"text", lsettext },
 			{"visible", NULL },
 			{"__tostring", lspriteinfo },
 			{"__gc", NULL },
