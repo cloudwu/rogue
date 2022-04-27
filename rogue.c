@@ -6,12 +6,12 @@
 #include <string.h>
 
 #include "SDL.h"
-#include "vga8x16.h"
+#include "charset_cp437.h"
 #include "charset_cp936.h"
 
 #define FRAMESEC 1000
-#define PIXELWIDTH 8
-#define PIXELHEIGHT 16
+#define PIXELWIDTH 6
+#define PIXELHEIGHT 12
 #define TABSIZE 8
 #define UNICACHE 1024
 
@@ -249,11 +249,11 @@ draw_slot(uint8_t *p, struct slot *s, int pitch) {
 	const uint8_t *g;
 	int g_pitch;
 	if (s->code <= 255) {
-		g = &vga8x16[s->code * 16];
+		g = &uni6x12_cp437[s->code * 12];
 		g_pitch = 1;
 	} else {
 		int code = s->code - 256;
-		g = &uni16x16_cp936[code * 32];
+		g = &uni12x12_cp936[code * 24];
 		if (s->rightpart)
 			++g;
 		g_pitch = 2;
@@ -262,9 +262,9 @@ draw_slot(uint8_t *p, struct slot *s, int pitch) {
 	color16to24(s->background, b);
 	color16to24(s->color, c);
 	int i,j;
-	for (i=0;i<16;i++) {
+	for (i=0;i<12;i++) {
 		uint8_t m = *g;
-		for (j=0;j<8;j++) {
+		for (j=0;j<6;j++) {
 			uint8_t *color = (m & 0x80) ? c : b;
 			p[j*3+0] = color[0];
 			p[j*3+1] = color[1];
