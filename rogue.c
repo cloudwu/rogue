@@ -464,6 +464,9 @@ levent(lua_State *L) {
 				if ((r = keyevent(L, &event)) > 0)
 					return r;
 				break;
+			case SDL_TEXTEDITING:
+				SDL_StopTextInput();
+				break;
 			default:
 				break;
 		}
