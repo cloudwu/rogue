@@ -57,6 +57,9 @@ s2:setcolor {
 local x = 0
 local y = 0
 
+local camera_x = 0
+local camera_y = 0
+
 local EVENT = {}
 
 function EVENT.QUIT()
@@ -74,11 +77,23 @@ function EVENT.KEY(name, press)
 		elseif name == "Down" then
 			y = y + 1
 		elseif name == "Q" then
-			background:visible(false)
+			title:visible(false)
+		elseif name == "Z" then
+			c.layer { [0] = false }
+		elseif name == "A" then
+			camera_x = camera_x - 1
+		elseif name == "D" then
+			camera_x = camera_x + 1
+		elseif name == "W" then
+			camera_y = camera_y - 1
+		elseif name == "S" then
+			camera_y = camera_y + 1
 		end
 	else
 		if name == "Q" then
-			background:visible(true)
+			title:visible(true)
+		elseif name == "Z" then
+			c.layer { [0] = true }
 		end
 	end
 end
@@ -95,5 +110,5 @@ while dispatch(c.event()) do
 	s:setpos(x,y)
 	title:setpos(x, y+4)
 	title:text(string.format("x = %d\ny = %d", x, y))
-	c.frame()
+	c.frame(camera_x, camera_y)
 end
