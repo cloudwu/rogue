@@ -1,3 +1,5 @@
+assert(package.loadlib(assert(package.searchpath("SDL2", package.cpath)), "*"))
+
 local c = require "rogue.core"
 
 c.init {
