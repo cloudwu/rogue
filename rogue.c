@@ -208,7 +208,10 @@ linit(lua_State *L) {
 	flags |= is_enable(L, 1, "resizeable") & SDL_WINDOW_RESIZABLE;
 	flags |= is_enable(L, 1, "fullscreen") & SDL_WINDOW_FULLSCREEN;
 
-	if (SDL_CreateWindowAndRenderer(width * PIXELWIDTH, height * PIXELHEIGHT, flags, &wnd, &r)) {
+	int doublesize = is_enable(L, 1, "doublesize");
+	int scale = doublesize ? 2 : 1;
+
+	if (SDL_CreateWindowAndRenderer(width * PIXELWIDTH * scale, height * PIXELHEIGHT * scale, flags, &wnd, &r)) {
         return luaL_error(L, "Couldn't create window and renderer: %s", SDL_GetError());
     }
 

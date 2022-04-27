@@ -8,6 +8,7 @@ c.init {
 	height = 25,
 	fps = 25,
 	resizeable = true,
+	doublesize = true,
 }
 
 local background = c.sprite {
