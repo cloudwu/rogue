@@ -7,16 +7,19 @@
 
 #include "SDL.h"
 #include "vga8x16.h"
+#include "charset_cp936.h"
 
 #define FRAMESEC 1000
 #define PIXELWIDTH 8
 #define PIXELHEIGHT 16
 #define TABSIZE 8
+#define UNICACHE 1024
 
 struct slot {
 	uint16_t background;	// 565 RGB
 	uint16_t color;		// 565 RGB
-	uint32_t code:24;	// for unicode
+	uint32_t code:23;	// for unicode
+	uint32_t rightpart:1;
 	uint32_t layer:8;
 };
 
@@ -28,6 +31,11 @@ struct sprite {
 	int x;
 	int y;
 	struct slot s[1];
+};
+
+struct unicode_cache {
+	int unicode[UNICACHE];
+	uint16_t index[UNICACHE];
 };
 
 struct context {
@@ -46,7 +54,90 @@ struct context {
 	struct slot *s;
 	struct sprite *spr;
 	uint8_t layer[256];
+	struct unicode_cache u;
 };
+
+static inline int
+inthash(int p) {
+	int h = (2654435761 * p) % UNICACHE;
+	return h;
+}
+
+static int
+search_cp437(int unicode) {
+	static const uint16_t cp437_unicode[] = {
+		0x00a0,0x00a1,0x00a2,0x00a3,0x00a5,0x00aa,0x00ab,0x00ac,0x00b0,0x00b1,0x00b2,0x00b5,0x00b7,0x00ba,0x00bb,0x00bc,
+		0x00bd,0x00bf,0x00c4,0x00c5,0x00c6,0x00c7,0x00c9,0x00d1,0x00d6,0x00dc,0x00df,0x00e0,0x00e1,0x00e2,0x00e4,0x00e5,
+		0x00e6,0x00e7,0x00e8,0x00e9,0x00ea,0x00eb,0x00ec,0x00ed,0x00ee,0x00ef,0x00f1,0x00f2,0x00f3,0x00f4,0x00f6,0x00f7,
+		0x00f9,0x00fa,0x00fb,0x00fc,0x00ff,0x0192,0x0393,0x0398,0x03a3,0x03a6,0x03a9,0x03b1,0x03b4,0x03b5,0x03c0,0x03c3,
+		0x03c4,0x03c6,0x207f,0x20a7,0x2219,0x221a,0x221e,0x2229,0x2248,0x2261,0x2264,0x2265,0x2310,0x2320,0x2321,0x2500,
+		0x2502,0x250c,0x2510,0x2514,0x2518,0x251c,0x2524,0x252c,0x2534,0x253c,0x2550,0x2551,0x2552,0x2553,0x2554,0x2555,
+		0x2556,0x2557,0x2558,0x2559,0x255a,0x255b,0x255c,0x255d,0x255e,0x255f,0x2560,0x2561,0x2562,0x2563,0x2564,0x2565,
+		0x2566,0x2567,0x2568,0x2569,0x256a,0x256b,0x256c,0x2580,0x2584,0x2588,0x258c,0x2590,0x2591,0x2592,0x2593,0x25a0,
+	};
+	static const uint8_t cp437_index[] = {
+		255,173,155,156,157,166,174,170,248,241,253,230,250,167,175,172,
+		171,168,142,143,146,128,144,165,153,154,225,133,160,131,132,134,
+		145,135,138,130,136,137,141,161,140,139,164,149,162,147,148,246,
+		151,163,150,129,152,159,226,233,228,232,234,224,235,238,227,229,
+		231,237,252,158,249,251,236,239,247,240,243,242,169,244,245,196,
+		179,218,191,192,217,195,180,194,193,197,205,186,213,214,201,184,
+		183,187,212,211,200,190,189,188,198,199,204,181,182,185,209,210,
+		203,207,208,202,216,215,206,223,220,219,221,222,176,177,178,254,
+	};
+	int begin = 0;
+	int end = sizeof(cp437_unicode) / sizeof(cp437_unicode[0]);
+	while (begin < end) {
+		int mid = (begin + end) / 2;
+		uint16_t code = cp437_unicode[mid];
+		if (code == unicode) {
+			return cp437_index[mid];
+		}
+		else if (code < unicode)
+			begin = mid + 1;
+		else
+			end = mid;
+	}
+	return -1;
+}
+
+static int
+search_cp936(int unicode) {
+	int begin = 0;
+	int end = sizeof(unimap_cp936) / sizeof(unimap_cp936[0]);
+	while (begin < end) {
+		int mid = (begin + end) / 2;
+		uint16_t code = unimap_cp936[mid];
+		if (code == unicode)
+			return mid;
+		else if (code < unicode)
+			begin = mid + 1;
+		else
+			end = mid;
+	}
+	return -1;
+}
+
+static int
+unicode_index(struct context *ctx, int unicode) {
+	if (unicode <= 127)
+		return unicode;
+	int slot = inthash(unicode);
+	if (ctx->u.unicode[slot] != unicode) {
+		ctx->u.unicode[slot] = unicode;
+		ctx->u.index[slot] = 255;
+		int code = search_cp437(unicode);
+		if (code >= 0) {
+			ctx->u.index[slot] = code;
+		} else {
+			code = search_cp936(unicode);
+			if (code >= 0) {
+				ctx->u.index[slot] = code + 256;
+			}
+		}
+	}
+	return ctx->u.index[slot];
+}
 
 static struct context *
 getCtx(lua_State *L) {
@@ -155,15 +246,24 @@ color16to24(uint16_t c16, uint8_t c[3]) {
 
 static inline void
 draw_slot(uint8_t *p, struct slot *s, int pitch) {
-	if (s->code > 255)
-		return;
-	const uint8_t *g = &vga8x16[s->code * 16];
+	const uint8_t *g;
+	int g_pitch;
+	if (s->code <= 255) {
+		g = &vga8x16[s->code * 16];
+		g_pitch = 1;
+	} else {
+		int code = s->code - 256;
+		g = &uni16x16_cp936[code * 32];
+		if (s->rightpart)
+			++g;
+		g_pitch = 2;
+	}
 	uint8_t b[3], c[3];
 	color16to24(s->background, b);
 	color16to24(s->color, c);
 	int i,j;
 	for (i=0;i<16;i++) {
-		uint8_t m = g[i];
+		uint8_t m = *g;
 		for (j=0;j<8;j++) {
 			uint8_t *color = (m & 0x80) ? c : b;
 			p[j*3+0] = color[0];
@@ -172,6 +272,7 @@ draw_slot(uint8_t *p, struct slot *s, int pitch) {
 			m <<= 1;
 		}
 		p+=pitch;
+		g+=g_pitch;
 	}
 }
 
@@ -370,35 +471,6 @@ levent(lua_State *L) {
 	return 0;
 }
 
-static int
-get_sprite_width(lua_State *L, int idx, int line) {
-	if (lua_geti(L, idx, line) != LUA_TSTRING) {
-		luaL_error(L, "Invalid sprite");
-	}
-	size_t sz;
-	lua_tolstring(L, -1, &sz);
-	lua_pop(L, 1);
-	return (int)sz;
-}
-
-static void
-check_sprite_size(lua_State *L, int idx, int *w, int *h) {
-	int lines = (int)lua_rawlen(L, idx);
-	if (lines <= 0)
-		luaL_error(L, "sprite height 0");
-	*h = lines;
-	int width = get_sprite_width(L, idx, 1);
-	if (width <= 0)
-		luaL_error(L, "sprite width 0");
-	*w = width;
-	int i;
-	for (i=2;i<=lines;i++) {
-		if (get_sprite_width(L, idx, i) != width) {
-			luaL_error(L, "sprite is not a rect");
-		}
-	}
-}
-
 static struct sprite *
 getSpr(lua_State *L) {
 	struct sprite *spr = lua_touserdata(L, 1);
@@ -482,8 +554,41 @@ struct sprite_attribs {
 	uint8_t layer;
 };
 
+/*
+**    From lua 5.4 lutf8lib.c
+** Decode one UTF-8 sequence, returning NULL if byte sequence is
+** invalid.  The array 'limits' stores the minimum value for each
+** sequence length, to check for overlong representations. Its first
+** entry forces an error for non-ascii bytes with no continuation
+** bytes (count == 0).
+*/
+static const char *
+utf8_decode(const char *s, int *val) {
+  static const int limits[] =
+        {~(int)0, 0x80, 0x800, 0x10000u, 0x200000u, 0x4000000u};
+  unsigned int c = (unsigned char)s[0];
+  int res = 0;  /* final result */
+  if (c < 0x80)  /* ascii? */
+    res = c;
+  else {
+    int count = 0;  /* to count number of continuation bytes */
+    for (; c & 0x40; c <<= 1) {  /* while it needs continuation bytes... */
+      unsigned int cc = (unsigned char)s[++count];  /* read next byte */
+      if ((cc & 0xC0) != 0x80)  /* not a continuation byte? */
+        return NULL;  /* invalid byte sequence */
+      res = (res << 6) | (cc & 0x3F);  /* add lower 6 bits from cont. byte */
+    }
+    res |= ((int)(c & 0x7F) << (count * 5));  /* add first byte */
+    if (count > 5 || res < limits[count])
+      return NULL;  /* invalid byte sequence */
+    s += count;  /* skip continuation bytes read */
+  }
+  if (val) *val = res;
+  return s + 1;  /* +1 to include first byte */
+}
+
 static void
-sprite_graph(lua_State *L, int idx, struct sprite *spr, struct sprite_attribs *attrib) {
+sprite_graph(lua_State *L, int idx, struct context *ctx, struct sprite *spr, struct sprite_attribs *attrib) {
 	int i,j;
 	struct slot *s = spr->s;
 	for (i=0;i<spr->h;i++) {
@@ -494,10 +599,19 @@ sprite_graph(lua_State *L, int idx, struct sprite *spr, struct sprite_attribs *a
 			s[j].background = attrib->background;
 			s[j].color = attrib->color;
 			s[j].layer = attrib->layer;
-			int c = (uint8_t)str[j];
+			int unicode;
+			if (!(str = utf8_decode(str, &unicode)))
+				luaL_error(L, "Invalid utf8 text");
+			int c = unicode_index(ctx, unicode);
 			if (c == attrib->transparency)
 				c = 0;
 			s[j].code = c;
+			s[j].rightpart = 0;
+			if (c > 256) {
+				s[j+1] = s[j];
+				s[j+1].rightpart = 1;
+				++j;
+			}
 		}
 		s += spr->w;
 	}
@@ -574,11 +688,6 @@ lsetcolor(lua_State *L) {
 		return 0;
 	}
 	luaL_checktype(L, 2, LUA_TTABLE);
-	int w,h;
-	check_sprite_size(L, 2, &w, &h);
-	if (w != spr->w || h != spr->h) {
-		return luaL_error(L, "Sprite (%dx%d) size mismatch : (%dx%d)", spr->w, spr->h, w, h);
-	}
 	int pal[256];
 	int i,j;
 	for (i=0;i<256;i++) {
@@ -586,11 +695,15 @@ lsetcolor(lua_State *L) {
 	}
 	struct slot *s = spr->s;
 	for (i=0;i<spr->h;i++) {
-		lua_geti(L, 2, i+1);
+		if (lua_geti(L, 2, i+1) != LUA_TSTRING) {
+			return luaL_error(L, "Invalid colormap");
+		}
 		const char * str = lua_tostring(L, -1);
 		lua_pop(L, 1);
 		for (j=0;j<spr->w;j++) {
 			int index = (uint8_t)str[j];
+			if (index > 127 || index == 0)
+				return luaL_error(L, "Invalid colormap, ascii only");
 			if (pal[index] >= 0) {
 				s[j].color = pal[index];
 			} else if (pal[index] == COLOR_UNINIT) {
@@ -614,53 +727,105 @@ lsetcolor(lua_State *L) {
 	return 0;
 }
 
+static void
+clear_sprite_text(struct sprite *spr) {
+	int n = spr->w * spr->h;
+	int i;
+	for (i=0;i<n;i++) {
+		spr->s[i].code = ' ';
+		spr->s[i].rightpart = 0;
+	}
+}
+
 static int
 lsettext(lua_State *L) {
+	struct context *ctx = getCtx(L);
 	struct sprite * spr = getSpr(L);
 	const char *text = luaL_checkstring(L, 2);
 	int x=0;
 	int y=0;
-	int i,j;
 	struct slot *s = spr->s;
-	for (i=0;text[i] && y < spr->h;i++) {
-		char c = text[i];
-		int nextline = 0;
+	int unicode = 0;
+	clear_sprite_text(spr);
+	while (y < spr->h && ((text = utf8_decode(text, &unicode)), unicode)) {
+		if (text == NULL)
+			return luaL_error(L, "Invalid UTF-8 string %s", lua_tostring(L, 2));
+		int c = unicode_index(ctx, unicode);
 		if (c == '\n') {
-			nextline = 1;
+			x = spr->w;
 		} else if (c == '\t') {
 			x = (x / TABSIZE + 1) * TABSIZE;
-			if (x >= spr->w) {
-				nextline = 1;
-			}
-		} else {
-			s[x].code = text[i];
+		} else if (c <= 255) {
+			s[x].code = c;
 			++x;
-			if (x >= spr->w) {
-				nextline = 1;
+		} else {
+			if (x + 1 >= spr->w) {
+				if (spr->w < 2)
+					return luaL_error(L, "Invalid sprite width %d", spr->w);
 				x = 0;
+				++y;
+				if (y <= spr->h)
+					break;
+				s += spr->w;
 			}
+			s[x].code = c;
+			++x;
+			s[x].code = c;
+			s[x].rightpart = 1;
+			++x;
 		}
-		if (nextline) {
-			for (j=x;j<spr->w;j++) {
-				s[j].code = ' ';
-			}
-			++y;
+		if (x >= spr->w) {
 			x = 0;
+			++y;
 			s += spr->w;
 		}
-	}
-	int n = spr->w * (spr->h - i);
-	for (i=0;i<n;i++) {
-		s[i].code = ' ';
 	}
 	return 0;
 }
 
 static int
+get_sprite_width(lua_State *L, struct context *ctx, int idx, int line) {
+	if (lua_geti(L, idx, line) != LUA_TSTRING) {
+		luaL_error(L, "Invalid sprite");
+	}
+	const char * s = lua_tostring(L, -1);
+	int len = 0;
+	int code = 0;
+	while ((s = utf8_decode(s, &code)) && code) {
+		int c = unicode_index(ctx, code);
+		if (c > 255)
+			len += 2;
+		else
+			++len;
+	}
+	lua_pop(L, 1);
+	return len;
+}
+
+static void
+check_sprite_size(lua_State *L, struct context *ctx, int idx, int *w, int *h) {
+	int lines = (int)lua_rawlen(L, idx);
+	if (lines <= 0)
+		luaL_error(L, "sprite height 0");
+	*h = lines;
+	int width = get_sprite_width(L, ctx, idx, 1);
+	if (width <= 0)
+		luaL_error(L, "sprite width 0");
+	*w = width;
+	int i;
+	for (i=2;i<=lines;i++) {
+		if (get_sprite_width(L, ctx, idx, i) != width) {
+			luaL_error(L, "sprite is not a rect");
+		}
+	}
+}
+
+static int
 lsprite(lua_State *L) {
+	struct context *ctx = getCtx(L);
 	luaL_checktype(L, 1, LUA_TTABLE);
 	int w,h;
-	check_sprite_size(L, 1, &w, &h);
+	check_sprite_size(L, ctx, 1, &w, &h);
 	size_t sz = sprite_size(w,h);
 	struct sprite *spr = (struct sprite *)lua_newuserdatauv(L, sz, 0);
 	spr->w = w;
@@ -674,6 +839,9 @@ lsprite(lua_State *L) {
 	if (lua_getfield(L, 1, "transparency") == LUA_TSTRING) {
 		const char * t = lua_tostring(L, -1);
 		a.transparency = (unsigned)*t;
+		if (a.transparency > 127 || a.transparency == 0) {
+			return luaL_error(L, "transparency is ascii only");
+		}
 	}
 	lua_pop(L, 1);
 	a.color = get_color(L, 1, "color", 0xffff);
@@ -689,17 +857,16 @@ lsprite(lua_State *L) {
 	}
 	lua_pop(L, 1);
 
-	sprite_graph(L, 1, spr, &a);
+	sprite_graph(L, 1, ctx, spr, &a);
 	if (luaL_newmetatable(L, "RSPRITE")) {
 		luaL_Reg l[] = {
-			{"setpos", lsetpos },
-			{"setcolor", lsetcolor },
-			{"clone", NULL },
-			{"text", lsettext },
-			{"visible", NULL },
-			{"__tostring", lspriteinfo },
-			{"__gc", NULL },
-			{"__index", NULL },
+			{ "setpos", lsetpos },
+			{ "setcolor", lsetcolor },
+			{ "clone", NULL },
+			{ "visible", NULL },
+			{ "__tostring", lspriteinfo },
+			{ "__gc", NULL },
+			{ "__index", NULL },
 			{ NULL, NULL },
 		};
 		luaL_setfuncs(L, l, 0);
@@ -709,6 +876,7 @@ lsprite(lua_State *L) {
 		luaL_Reg l2[] = {
 			{ "clone", lclone },
 			{ "visible", lvisible },
+			{ "text", lsettext },
 			{ "__gc", lvisible },
 			{ NULL, NULL },
 		};
@@ -717,7 +885,7 @@ lsprite(lua_State *L) {
 		luaL_setfuncs(L, l2, 1);
 	}
 	lua_setmetatable(L, -2);
-	link_sprite(getCtx(L), spr);
+	link_sprite(ctx, spr);
 	return 1;
 }
 
