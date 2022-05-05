@@ -47,7 +47,7 @@ end
 
 ```
 
-The event can be "QUIT" and "KEY" .
+The event can be "QUIT" , "KEY" , "MOTION", "BUTTON" .
 
 About Sprite
 ============

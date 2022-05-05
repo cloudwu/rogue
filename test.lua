@@ -32,6 +32,7 @@ local background = c.sprite {
 	[[..........................≡±≥≤⌠⌡÷≈°∙·√ⁿ²■ ]],
 	[[................................你好，世界]],
 	color = 0x404040,
+	layer = 1,
 }
 
 local s = c.sprite {
@@ -41,14 +42,14 @@ local s = c.sprite {
 	".-----.",
 	color = 0xff0000,
 	transparency = '.',
-	layer = 1,
+	layer = 2,
 }
 
 local title = c.sprite {
 	"       ",
 	"       ",
 	color = 0x80ff,
-	layer = 2,
+	layer = 3,
 }
 
 local s2 = s:clone()
@@ -60,6 +61,12 @@ s2:setcolor {
 	"| Y Y |",
 	"|  W  |",
 	".-----.",
+}
+
+local mouse_cursor = c.sprite {
+	" ",
+	background = 0x808080,
+	layer = 0,
 }
 
 
@@ -88,7 +95,7 @@ function EVENT.KEY(name, press)
 		elseif name == "Q" then
 			title:visible(false)
 		elseif name == "Z" then
-			c.layer { [0] = false }
+			c.layer { [1] = false }
 		elseif name == "A" then
 			camera_x = camera_x - 1
 		elseif name == "D" then
@@ -102,9 +109,18 @@ function EVENT.KEY(name, press)
 		if name == "Q" then
 			title:visible(true)
 		elseif name == "Z" then
-			c.layer { [0] = true }
+			c.layer { [1] = true }
 		end
 	end
+end
+
+function EVENT.MOTION(x, y)
+	mouse_cursor:setpos(x,y)
+end
+
+function EVENT.BUTTON(x, y, button, pressed, click)
+	mouse_cursor:setpos(x,y)
+	mouse_cursor:visible(not pressed)
 end
 
 local function dispatch(name, ...)

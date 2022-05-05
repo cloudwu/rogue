@@ -14,6 +14,7 @@
 #define PIXELHEIGHT 12
 #define TABSIZE 8
 #define UNICACHE 1024
+#define BACKLAYER 255
 
 struct slot {
 	uint16_t background;	// 565 RGB
@@ -30,6 +31,7 @@ struct sprite {
 	unsigned h;
 	int x;
 	int y;
+	int background;
 	struct slot s[1];
 };
 
@@ -51,6 +53,8 @@ struct context {
 	int height;
 	int w;
 	int h;
+	int mousex;
+	int mousey;
 	struct slot *s;
 	struct sprite *spr;
 	uint8_t layer[256];
@@ -337,7 +341,13 @@ draw_sprite(struct context *ctx, struct sprite *spr) {
 	for (i=0;i<h;i++) {
 		for (j=0;j<w;j++) {
 			if (ctx->layer[src_slot[j].layer] == 0 && src_slot[j].code && src_slot[j].layer >= des_slot[j].layer) {
-				des_slot[j] = src_slot[j];
+				if (spr->background) {
+					des_slot[j] = src_slot[j];
+				} else {
+					uint16_t bg = des_slot[j].background;
+					des_slot[j] = src_slot[j];
+					des_slot[j].background = bg;
+				}
 			}
 		}
 		src_slot += spr->w;
@@ -455,6 +465,45 @@ keyevent(lua_State *L, SDL_Event *ev) {
 	return 3;
 }
 
+static void
+screen_coord(int *x, int *y) {
+	*x /= PIXELWIDTH;
+	*y /= PIXELHEIGHT;
+}
+
+static int
+motionevent(lua_State *L, SDL_Event *ev) {
+	int x = ev->motion.x;
+	int y = ev->motion.y;
+	screen_coord(&x, &y);
+	struct context * ctx = getCtx(L);
+	if (x == ctx->mousex && y == ctx->mousey)
+		return 0;
+	ctx->mousex = x;
+	ctx->mousey = y;
+	lua_pushstring(L, "MOTION");
+	lua_pushinteger(L, x);
+	lua_pushinteger(L, y);
+	return 3;
+}
+
+static int
+buttonevent(lua_State *L, SDL_Event *ev) {
+	int x = ev->motion.x;
+	int y = ev->motion.y;
+	screen_coord(&x, &y);
+	struct context * ctx = getCtx(L);
+	ctx->mousex = x;
+	ctx->mousey = y;
+	lua_pushstring(L, "BUTTON");
+	lua_pushinteger(L, x);
+	lua_pushinteger(L, y);
+	lua_pushinteger(L, ev->button.button);
+	lua_pushboolean(L, ev->button.state == SDL_PRESSED);
+	lua_pushinteger(L, ev->button.clicks);
+	return 6;
+}
+
 static int
 levent(lua_State *L) {
 	SDL_Event event;
@@ -477,6 +526,13 @@ levent(lua_State *L) {
 			case SDL_TEXTEDITING:
 				SDL_StopTextInput();
 				break;
+			case SDL_MOUSEMOTION:
+				if ((r = motionevent(L, &event)) > 0)
+					return r;
+				break;
+			case SDL_MOUSEBUTTONDOWN:
+			case SDL_MOUSEBUTTONUP:
+				return buttonevent(L, &event);
 			default:
 				break;
 		}
@@ -639,10 +695,16 @@ color24to16(uint32_t c) {
 }
 
 static uint16_t
-get_color(lua_State *L, int idx, const char *name, uint16_t def) {
+get_color(lua_State *L, int idx, const char *name, uint16_t def, int *hascolor) {
 	if (lua_getfield(L, idx, name) == LUA_TNIL) {
+		if (hascolor) {
+			*hascolor = 0;
+		}
 		lua_pop(L, 1);
 		return def;
+	}
+	if (hascolor) {
+		*hascolor = 1;
 	}
 	int isnum;
 	uint32_t c = lua_tointegerx(L, -1, &isnum);
@@ -857,9 +919,9 @@ lsprite(lua_State *L) {
 		}
 	}
 	lua_pop(L, 1);
-	a.color = get_color(L, 1, "color", 0xffff);
-	a.background = get_color(L, 1, "background", 0);
-	a.layer = 0;
+	a.color = get_color(L, 1, "color", 0xffff, NULL);
+	a.background = get_color(L, 1, "background", 0, &spr->background);
+	a.layer = 1;
 	if (lua_getfield(L, 1, "layer") == LUA_TNUMBER) {
 		int layer = lua_tointeger(L, -1);
 		if (layer < 0)
@@ -933,6 +995,8 @@ luaopen_rogue_core(lua_State *L) {
 	luaL_newlibtable(L, l);
 	struct context *ctx = (struct context *)lua_newuserdatauv(L, sizeof(struct context), 1);
 	memset(ctx, 0, sizeof(*ctx));
+	ctx->mousex = -1;
+	ctx->mousey = -1;
 	luaL_setfuncs(L,l,1);
 	return 1;
 }
