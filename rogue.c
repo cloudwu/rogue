@@ -803,6 +803,33 @@ lsetcolor(lua_State *L) {
 }
 
 static void
+reset_layer(struct sprite *spr, uint8_t c) {
+	int i,j;
+	struct slot *s = spr->s;
+	for (i=0;i<spr->h;i++) {
+		for (j=0;j<spr->w;j++) {
+			s[j].layer = c;
+		}
+		s += spr->w;
+	}
+}
+
+static int
+lsetlayer(lua_State *L) {
+	struct sprite *spr = getSpr(L);
+	if (lua_type(L, 2) == LUA_TNUMBER) {
+		int isnum;
+		uint32_t c = lua_tointegerx(L, -1, &isnum);
+		if (!isnum)
+			return luaL_error(L, "Layer should be byte");
+		reset_layer(spr, c);
+		return 0;
+	}
+	return luaL_error(L, "Invalid layer");
+}
+
+
+static void
 clear_sprite_text(struct sprite *spr) {
 	int n = spr->w * spr->h;
 	int i;
@@ -937,6 +964,7 @@ lsprite(lua_State *L) {
 		luaL_Reg l[] = {
 			{ "setpos", lsetpos },
 			{ "setcolor", lsetcolor },
+			{ "setlayer", lsetlayer },
 			{ "clone", NULL },
 			{ "visible", NULL },
 			{ "__tostring", lspriteinfo },
