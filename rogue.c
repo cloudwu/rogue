@@ -49,9 +49,9 @@ struct context {
 	int fps;
 	int x;
 	int y;
-	int width;
+	int width;	// grid
 	int height;
-	int w;
+	int w;		// pixel
 	int h;
 	int mousex;
 	int mousey;
@@ -466,17 +466,17 @@ keyevent(lua_State *L, SDL_Event *ev) {
 }
 
 static void
-screen_coord(int *x, int *y) {
-	*x /= PIXELWIDTH;
-	*y /= PIXELHEIGHT;
+screen_coord(struct context *ctx, int *x, int *y) {
+	*x = *x * ctx->width / ctx->w;
+	*y = *y * ctx->height / ctx->h;
 }
 
 static int
 motionevent(lua_State *L, SDL_Event *ev) {
+	struct context * ctx = getCtx(L);
 	int x = ev->motion.x;
 	int y = ev->motion.y;
-	screen_coord(&x, &y);
-	struct context * ctx = getCtx(L);
+	screen_coord(ctx, &x, &y);
 	if (x == ctx->mousex && y == ctx->mousey)
 		return 0;
 	ctx->mousex = x;
@@ -489,10 +489,10 @@ motionevent(lua_State *L, SDL_Event *ev) {
 
 static int
 buttonevent(lua_State *L, SDL_Event *ev) {
+	struct context * ctx = getCtx(L);
 	int x = ev->motion.x;
 	int y = ev->motion.y;
-	screen_coord(&x, &y);
-	struct context * ctx = getCtx(L);
+	screen_coord(ctx, &x, &y);
 	ctx->mousex = x;
 	ctx->mousey = y;
 	lua_pushstring(L, "BUTTON");
