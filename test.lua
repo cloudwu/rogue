@@ -9,6 +9,8 @@ c.init {
 	fps = 25,
 	resizeable = true,
 	scale = 1,
+--	software = true,
+	vsync = true,
 }
 
 local background = c.sprite {

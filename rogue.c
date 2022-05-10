@@ -205,9 +205,6 @@ linit(lua_State *L) {
 	int width = get_int(L, 1, "width");
 	int height = get_int(L, 1, "height");
 
-	SDL_Window *wnd = NULL;
-	SDL_Renderer *r = NULL;
-
 	SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "linear");
 
 	uint32_t flags = 0;
@@ -225,17 +222,26 @@ linit(lua_State *L) {
 	ctx->w = width * scale * PIXELWIDTH;
 	ctx->h = height * scale * PIXELHEIGHT;
 
-	if (SDL_CreateWindowAndRenderer(ctx->w, ctx->h, flags, &wnd, &r)) {
-        return luaL_error(L, "Couldn't create window and renderer: %s", SDL_GetError());
-    }
-
-	SDL_RenderSetLogicalSize(r, width * PIXELWIDTH, height * PIXELHEIGHT);
-
+	const char * title = "";
 	if (lua_getfield(L, 1, "title") == LUA_TSTRING) {
-		const char * s = lua_tostring(L, -1);
-		SDL_SetWindowTitle(wnd, s);
+		title = lua_tostring(L, -1);
 		lua_pop(L, 1);
 	}
+
+	SDL_Window *wnd = SDL_CreateWindow(title, SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, ctx->w, ctx->h, flags);
+	if (wnd == NULL) {
+        return luaL_error(L, "Couldn't create window : %s", SDL_GetError());
+	}
+
+	flags = is_enable(L, 1, "software") ? SDL_RENDERER_SOFTWARE : SDL_RENDERER_ACCELERATED;
+	flags |= is_enable(L, 1, "vsync") & SDL_RENDERER_PRESENTVSYNC;
+
+	SDL_Renderer *r = SDL_CreateRenderer(wnd, -1, flags);
+	if (r == NULL) {
+        return luaL_error(L, "Couldn't create renderer: %s", SDL_GetError());
+	}
+
+	SDL_RenderSetLogicalSize(r, width * PIXELWIDTH, height * PIXELHEIGHT);
 
 	ctx->renderer = r;
 	ctx->window = wnd;
