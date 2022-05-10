@@ -229,6 +229,8 @@ linit(lua_State *L) {
         return luaL_error(L, "Couldn't create window and renderer: %s", SDL_GetError());
     }
 
+	SDL_RenderSetLogicalSize(r, width * PIXELWIDTH, height * PIXELHEIGHT);
+
 	if (lua_getfield(L, 1, "title") == LUA_TSTRING) {
 		const char * s = lua_tostring(L, -1);
 		SDL_SetWindowTitle(wnd, s);
@@ -468,8 +470,8 @@ keyevent(lua_State *L, SDL_Event *ev) {
 
 static void
 screen_coord(struct context *ctx, int *x, int *y) {
-	*x = *x * ctx->width / ctx->w;
-	*y = *y * ctx->height / ctx->h;
+	*x /= PIXELWIDTH;
+	*y /= PIXELHEIGHT;
 }
 
 static int
