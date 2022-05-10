@@ -222,7 +222,10 @@ linit(lua_State *L) {
 	}
 	lua_pop(L, 1);
 
-	if (SDL_CreateWindowAndRenderer(width * PIXELWIDTH * scale, height * PIXELHEIGHT * scale, flags, &wnd, &r)) {
+	ctx->w = width * scale * PIXELWIDTH;
+	ctx->h = height * scale * PIXELHEIGHT;
+
+	if (SDL_CreateWindowAndRenderer(ctx->w, ctx->h, flags, &wnd, &r)) {
         return luaL_error(L, "Couldn't create window and renderer: %s", SDL_GetError());
     }
 
@@ -240,8 +243,6 @@ linit(lua_State *L) {
 	ctx->width = width;
 	ctx->height = height;
 	ctx->surface = NULL;
-	ctx->w = width * PIXELWIDTH;
-	ctx->h = height * PIXELHEIGHT;
 
 	init_surface(L, ctx);
 	init_slotbuffer(L, ctx);
