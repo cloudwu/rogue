@@ -31,6 +31,8 @@ struct sprite {
 	unsigned h;
 	int x;
 	int y;
+	int kx;
+	int ky;
 	int background;
 	struct slot s[1];
 };
@@ -316,8 +318,8 @@ static inline void
 draw_sprite(struct context *ctx, struct sprite *spr) {
 	int src_x = 0;
 	int src_y = 0;
-	int des_x = spr->x - ctx->x;
-	int des_y = spr->y - ctx->y;
+	int des_x = spr->x - ctx->x - spr->kx;
+	int des_y = spr->y - ctx->y - spr->ky;
 	int w = spr->w;
 	int h = spr->h;
 	if (des_x < 0) {
@@ -620,7 +622,7 @@ lvisible(lua_State *L) {
 static int
 lspriteinfo(lua_State *L) {
 	struct sprite *spr = lua_touserdata(L, 1);
-	lua_pushfstring(L, "[sprite %dx%d %d %d]", spr->w, spr->h, spr->x, spr->y);
+	lua_pushfstring(L, "[sprite %dx%d+%d+%d %d %d]", spr->w, spr->h, spr->kx, spr->ky, spr->x, spr->y);
 
 	return 1;
 }
@@ -734,10 +736,18 @@ lclone(lua_State *L) {
 	size_t sz = sprite_size(spr->w,spr->h);
 	struct sprite *clone = (struct sprite *)lua_newuserdatauv(L, sz, 0);
 	memcpy(clone, spr, sz);
-	if (clone->prev) {
+	if (lua_isboolean(L, 2)) {
 		clone->prev = NULL;
 		clone->next = NULL;
-		link_sprite(getCtx(L), clone);
+		if (lua_toboolean(L, 2)) {
+			link_sprite(getCtx(L), clone);
+		}
+	} else {
+		if (clone->prev) {
+			clone->prev = NULL;
+			clone->next = NULL;
+			link_sprite(getCtx(L), clone);
+		}
 	}
 	luaL_getmetatable(L, "RSPRITE");
 	lua_setmetatable(L, -2);
@@ -943,6 +953,8 @@ lsprite(lua_State *L) {
 	spr->h = h;
 	spr->x = 0;
 	spr->y = 0;
+	spr->kx =0;
+	spr->ky =0;
 	spr->prev = NULL;
 	spr->next = NULL;
 	struct sprite_attribs a;
@@ -965,6 +977,14 @@ lsprite(lua_State *L) {
 		else if (layer > 255)
 			layer = 255;
 		a.layer = layer;
+	}
+	lua_pop(L, 1);
+	if (lua_getfield(L, 1, "kx") == LUA_TNUMBER) {
+		spr->kx = lua_tointeger(L, -1);
+	}
+	lua_pop(L, 1);
+	if (lua_getfield(L, 1, "ky") == LUA_TNUMBER) {
+		spr->ky = lua_tointeger(L, -1);
 	}
 	lua_pop(L, 1);
 

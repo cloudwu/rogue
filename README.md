@@ -64,12 +64,14 @@ local s = c.sprite {
 	background = 0,
 	transparency = '.',
 	layer = 1,
+	kx = 0,
+	ky = 0,
 }
 ```
 
 The layer is from 0 to 255, the larger will cover the lower. If two sprites intersected with the same layer, the behaviour is undefined.
 
-* sprite:clone()   Clone a sprite
+* sprite:clone([visible])   Clone a sprite
 * sprite:setpos(x,y) Move the sprite to (x,y)
 * sprite:color(color) Change the color
 * sprite:text(string) Replace the sprite with text.

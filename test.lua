@@ -9,7 +9,7 @@ c.init {
 	fps = 25,
 	resizeable = true,
 	scale = 1,
---	software = true,
+	software = true,
 	vsync = true,
 }
 
@@ -45,6 +45,8 @@ local s = c.sprite {
 	color = 0xff0000,
 	transparency = '.',
 	layer = 2,
+	kx = 3,
+	ky = 3,
 }
 
 local title = c.sprite {
@@ -52,9 +54,11 @@ local title = c.sprite {
 	"       ",
 	color = 0x80ff,
 	layer = 3,
+	kx = 3,
+	ky = -1,
 }
 
-local s2 = s:clone()
+local s2 = s:clone(true)
 s2:setcolor(0xff00)
 s2:setcolor {
 	Y = 0xffff00,
@@ -65,6 +69,8 @@ s2:setcolor {
 	".-----.",
 }
 
+s2:setpos(5,5)
+
 local mouse_cursor = c.sprite {
 	" ",
 	background = 0x808080,
@@ -72,8 +78,8 @@ local mouse_cursor = c.sprite {
 }
 
 
-local x = 0
-local y = 0
+local x = 3
+local y = 3
 
 local camera_x = 0
 local camera_y = 0
@@ -135,7 +141,7 @@ end
 
 while dispatch(c.event()) do
 	s:setpos(x,y)
-	title:setpos(x, y+4)
+	title:setpos(x, y)
 	title:text(string.format("x = %d\ny = %d", x, y))
 	c.frame(camera_x, camera_y)
 end
