@@ -351,13 +351,17 @@ draw_sprite(struct context *ctx, struct sprite *spr) {
 	struct slot *des_slot = &ctx->s[des_y * ctx->width + des_x];
 	for (i=0;i<h;i++) {
 		for (j=0;j<w;j++) {
-			if (ctx->layer[src_slot[j].layer] == 0 && src_slot[j].code && src_slot[j].layer >= des_slot[j].layer) {
-				if (spr->background) {
-					des_slot[j] = src_slot[j];
-				} else {
-					uint16_t bg = des_slot[j].background;
-					des_slot[j] = src_slot[j];
-					des_slot[j].background = bg;
+			if (ctx->layer[src_slot[j].layer] == 0 && src_slot[j].code) {
+				if (src_slot[j].layer >= des_slot[j].layer) {
+					if (spr->background) {
+						des_slot[j] = src_slot[j];
+					} else {
+						uint16_t bg = des_slot[j].background;
+						des_slot[j] = src_slot[j];
+						des_slot[j].background = bg;
+					}
+				} else if (spr->background) {
+					des_slot[j].background = src_slot[j].background;
 				}
 			}
 		}
